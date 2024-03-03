@@ -109,7 +109,7 @@ class bnn:
 
         model.summary()
 
-        model.fit(self.x[:, 0], self.y, batch_size=500, epochs=4000)
+        model.fit(self.x[:, 0], self.y, batch_size=200, epochs=4000)
 
         w = []
 
@@ -306,11 +306,11 @@ class bnn:
                                         )
 
         '''
-        kernel = tfp.mcmc.SimpleStepSizeAdaptation(kernel,
-                                                   num_adaptation_steps=int(kargs['num_results']),
-                                                   target_accept_prob=0.9,
-                                                   adaptation_rate=3/(kargs['num_results']),
-                                                  )
+        kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(kernel,
+                                                          num_adaptation_steps=int(kargs['num_results']),
+                                                          target_accept_prob=0.9,
+                                                          exploration_shrinkage = 0.1
+                                                         )
         '''
         kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(inner_kernel=kernel,
                                                           num_adaptation_steps=int(0.8 * num_burnin_steps)
