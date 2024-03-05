@@ -10,9 +10,9 @@ import matplotlib.pyplot as plt
 
 x = np.linspace(-2,2,100)
 
-y = np.cos(x)**2*x + np.random.normal(size=x.shape, loc=0, scale=0.05)
+y = np.cos(x)**2*x*10 + np.random.normal(size=x.shape, loc=0, scale=0.05)
 
-y_true = np.cos(x)**2*x
+y_true = np.cos(x)**2*x*10
 
 x, y = tf.convert_to_tensor(x, tf.float32), tf.convert_to_tensor(y, tf.float32)
 
@@ -37,11 +37,11 @@ plt.show()
 
 
 chain, trace, final_kernel_results = bayesian_nn.run_nou_step_adapt(initial_config=wl,
-                                                         step_size=0.5e-5,
+                                                         step_size=0.5e-4,
                                                          num_results=20000,
                                                          max_tree_depth=5,
                                                          parallel_iterations=10,
-                                                                    adaptation_rate=0.00004
+                                                                    adaptation_rate=-0.0001
                                                          )
 
 target_log_probs = trace

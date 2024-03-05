@@ -33,7 +33,7 @@ class bnn:
 
                 net = self.dense(net, weights, biases[..., None, :], activation)
             # final linear layer
-            net = activation(tf.matmul(net, weights_list[-1]) + biases_list[-1][..., None, :])
+            net = tf.matmul(net, weights_list[-1]) + biases_list[-1][..., None, :]
             return net
 
         return model
@@ -53,8 +53,7 @@ class bnn:
 
         kerasl.append(tf.keras.layers.Dense(units=1,
                                       kernel_initializer='random_normal',
-                                      bias_initializer='random_normal',
-                                      activation=activation))
+                                      bias_initializer='random_normal'))
 
         modeltry = keras.Sequential(kerasl)
 
