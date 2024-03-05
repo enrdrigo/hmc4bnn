@@ -37,12 +37,12 @@ plt.show()
 
 
 chain, trace, final_kernel_results = bayesian_nn.run_nou_step_adapt(initial_config=wl,
-                                                         step_size=2e-4,
+                                                         step_size=1e-5,
                                                          num_results=20000,
                                                          num_steps_between_results=0,
-                                                         max_tree_depth=7,
+                                                         max_tree_depth=5,
                                                          parallel_iterations=10,
-                                                                    adaptation_rate=0.00015
+                                                                    adaptation_rate=0.00004
                                                          )
 
 target_log_probs = trace

@@ -150,17 +150,17 @@ class bnn:
 
 
     def trace_fn(self, current_state, results):
-        tf.print(results.accepted_results.target_log_prob)
+        #tf.print(results.accepted_results.target_log_prob)
 
         return results
 
     def trace_fn_step(self, current_state, results):
-        tf.print(results.inner_results.accepted_results.target_log_prob, results.new_step_size)
+        #tf.print(results.inner_results.accepted_results.target_log_prob, results.new_step_size)
 
         return results
 
     def trace_fn_bi_nou(self, current_state, results):
-        tf.print(results.inner_results.target_log_prob, results.new_step_size, results.inner_results.leapfrogs_taken)
+        #tf.print(results.inner_results.target_log_prob, results.new_step_size, results.inner_results.leapfrogs_taken)
         return results
 
     def unnormalized_log_prob_off(self, *args):
@@ -304,7 +304,7 @@ class bnn:
         kernel = tfp.mcmc.SimpleStepSizeAdaptation(kernel,
                                                    num_adaptation_steps=kargs['num_results'],
                                                    target_accept_prob=0.9,
-                                                   adaptation_rate=-abs(kargs['adaptation_rate']),
+                                                   adaptation_rate=kargs['adaptation_rate'],
                                                   )
 
 
@@ -358,7 +358,7 @@ class bnn:
         return chain, trace.target_log_prob, final_kernel_results
 
 
-@tf.function(jit_compile=False)
+@tf.function(jit_compile=True)
 def graph_hmc(*args, **kwargs):
     """Compile static graph for tfp.mcmc.sample_chain.
     Since this is bulk of the computation, using @tf.function here
