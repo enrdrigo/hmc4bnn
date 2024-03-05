@@ -25,18 +25,30 @@ class bnn:
 
         return activation(tf.matmul(X, W) + b)
 
-    def build_model(self, activation=tf.nn.tanh, optimizer='Adam', loss = 'mse', learning_rate=1e-3):
+    def build_network(self, weights_list, biases_list, activation=tf.nn.tanh):
+
+        def model(X):
+            net = X[:]
+            for (weights, biases) in zip(weights_list[:-1], biases_list[:-1]):
+
+                net = self.dense(net, weights, biases[..., None, :], activation)
+            # final linear layer
+            net = activation(tf.matmul(net, weights_list[-1]) + biases_list[-1][..., None, :])
+            return net
+
+        return model
+
+    def build_model(self, activation=tf.nn.tanh, optimizer='Adam', loss = 'mse', learning_rate=1e-5):
 
         kerasl=[tf.keras.layers.Dense(units=self.units[0],
                                       bias_initializer='random_normal',
                                       kernel_initializer='random_normal',
                                       input_shape=(1,),
                                       activation=activation)]
-        for l in self.units[0:]:
+        for l in self.units[1:]:
             kerasl.append(tf.keras.layers.Dense(units=l,
                                       bias_initializer='random_normal',
                                       kernel_initializer='random_normal',
-                                      input_shape=(1,),
                                       activation=activation))
 
         kerasl.append(tf.keras.layers.Dense(units=1,
@@ -106,11 +118,11 @@ class bnn:
     def initialize(self):
         model = self.build_model()
 
-        model(self.x)
+        model(self.x[:, 0])
 
         model.summary()
 
-        model.fit(self.x[:, 0], self.y, batch_size=int(self.x.shape[0]/10), epochs=2000)
+        model.fit(self.x[:, 0], self.y, batch_size=self.x.shape[0], epochs=50000)
 
         w = []
 
@@ -127,42 +139,28 @@ class bnn:
         for idx, l in enumerate(model.layers):
             ws=l.get_weights()[0].shape
             wl.append(tf.convert_to_tensor(w[int(idx*2)], dtype=tf.float32)
-                      + tf.random.normal(shape=((self.n_chain, )+ws), stddev=0.01))
+                      + tf.random.normal(shape=((self.n_chain, )+ws), stddev=0.001))
             bs = l.get_weights()[1].shape
             wl.append(tf.convert_to_tensor(w[int(idx*2)+1], dtype=tf.float32)
-                      + tf.random.normal(shape=((self.n_chain, )+bs), stddev=0.01))
-
-
-
+                      + tf.random.normal(shape=((self.n_chain, )+bs), stddev=0.001))
         return wl
 
 
 
-    def build_network(self, weights_list, biases_list, activation=tf.nn.tanh):
 
-        def model(X):
-            net = X[:]
-            for (weights, biases) in zip(weights_list[:-1], biases_list[:-1]):
-
-                net = self.dense(net, weights, biases[..., None, :], activation)
-            # final linear layer
-            net = tf.matmul(net, weights_list[-1]) + biases_list[-1][..., None, :]
-            return net
-
-        return model
 
     def trace_fn(self, current_state, results):
-        tf.compat.v1.logging.info(f'{results.accepted_results.target_log_prob}')
+        tf.print(results.accepted_results.target_log_prob)
 
         return results
 
     def trace_fn_step(self, current_state, results):
-        tf.compat.v1.logging.info(f'{results.inner_results.accepted_results.target_log_prob}  {results.new_step_size}')
+        tf.print(results.inner_results.accepted_results.target_log_prob, results.new_step_size)
 
         return results
 
     def trace_fn_bi_nou(self, current_state, results):
-        tf.compat.v1.logging.info(f'{results.inner_results.target_log_prob} {results.new_step_size} {results.inner_results.leapfrogs_taken}')
+        tf.print(results.inner_results.target_log_prob, results.new_step_size, results.inner_results.leapfrogs_taken)
         return results
 
     def unnormalized_log_prob_off(self, *args):
@@ -360,7 +358,7 @@ class bnn:
         return chain, trace.target_log_prob, final_kernel_results
 
 
-@tf.function(jit_compile=True)
+@tf.function(jit_compile=False)
 def graph_hmc(*args, **kwargs):
     """Compile static graph for tfp.mcmc.sample_chain.
     Since this is bulk of the computation, using @tf.function here

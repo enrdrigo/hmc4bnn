@@ -8,25 +8,36 @@ import pickle as pkl
 
 import matplotlib.pyplot as plt
 
-x = np.linspace(0,20,200)
+x = np.linspace(-2,2,100)
 
-y = (np.sin(x / 2.2 - np.pi / 4) * 0.98 + np.sin( - x / 2.2 - np.pi / 4) * 0.98) / 2 + np.random.normal(size=x.shape, loc=0, scale=0.2) + 3
+y = np.cos(x)**2*x + np.random.normal(size=x.shape, loc=0, scale=0.05)
 
-y_true = (np.sin(x / 2.2 - np.pi / 4) * 0.98 + np.sin( - x / 2.2 - np.pi / 4) * 0.98) / 2 + 3
+y_true = np.cos(x)**2*x
 
 x, y = tf.convert_to_tensor(x, tf.float32), tf.convert_to_tensor(y, tf.float32)
 
-y_true = (np.sin(x.numpy() / 2.2 - np.pi / 4) * 0.98 + np.sin( - x.numpy() / 2.2 - np.pi / 4) * 0.98) / 2 + 3
-
-bayesian_nn = hmc.bnn(x, y, units=[7,7,7], n_chain=1)
+bayesian_nn = hmc.bnn(x, y, units=[32, 32], n_chain=1)
 
 wl = bayesian_nn.initialize()
 
 print(len(wl))
 
 
+model_var = bayesian_nn.build_network(wl[::2], wl[1::2])
+
+
+
+y_pred_var = model_var(bayesian_nn.x)
+
+plt.plot(bayesian_nn.x[:, 0].numpy(), bayesian_nn.y, '.', label='sample')
+plt.plot(bayesian_nn.x[:, 0].numpy(), y_true, label='True')
+plt.plot(bayesian_nn.x[:, 0].numpy(), y_pred_var[0, :, 0], label='variational')
+plt.legend()
+plt.show()
+
+
 chain, trace, final_kernel_results = bayesian_nn.run_nou_step_adapt(initial_config=wl,
-                                                         step_size=2e-3,
+                                                         step_size=2e-4,
                                                          num_results=20000,
                                                          num_steps_between_results=0,
                                                          max_tree_depth=7,
@@ -35,6 +46,9 @@ chain, trace, final_kernel_results = bayesian_nn.run_nou_step_adapt(initial_conf
                                                          )
 
 target_log_probs = trace
+
+with open('target_log_prob_bi.pkl', 'wb') as g:
+    pkl.dump(target_log_probs, g)
 bayesian_nn.plot_neg_log_likelihood(np.negative(target_log_probs))
 
 new_step=final_kernel_results.new_step_size
