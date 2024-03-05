@@ -245,7 +245,7 @@ class bnn:
                                                        trace_fn=self.trace_fn,
                                                        return_final_kernel_results=True,
                                                        parallel_iterations=kargs['parallel_iterations'],
-                                                       num_steps_between_results = 0
+                                                       num_steps_between_results = kargs['num_steps_between_results'],
                                                       )
 
         end = time.perf_counter()

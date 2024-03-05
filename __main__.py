@@ -37,9 +37,8 @@ plt.show()
 
 
 chain, trace, final_kernel_results = bayesian_nn.run_nou_step_adapt(initial_config=wl,
-                                                         step_size=1e-5,
+                                                         step_size=0.5e-5,
                                                          num_results=20000,
-                                                         num_steps_between_results=0,
                                                          max_tree_depth=5,
                                                          parallel_iterations=10,
                                                                     adaptation_rate=0.00004
@@ -51,7 +50,7 @@ with open('target_log_prob_bi.pkl', 'wb') as g:
     pkl.dump(target_log_probs, g)
 bayesian_nn.plot_neg_log_likelihood(np.negative(target_log_probs))
 
-new_step=final_kernel_results.new_step_size
+new_step = final_kernel_results.new_step_size
 print(new_step)
 
 w=[]
@@ -60,8 +59,23 @@ for sample in chain:
 
 chain, trace, final_kernel_results = bayesian_nn.run_hmc(initial_config=w,
                                                          step_size=new_step,
-                                                         num_results=1000,
+                                                         num_results=20000,
                                                          num_steps_between_results=0,
+                                                         num_leapfrog_steps=20,
+                                                         parallel_iterations=10
+                                                         )
+
+target_log_probs = trace
+bayesian_nn.plot_neg_log_likelihood(np.negative(target_log_probs))
+
+w=[]
+for sample in chain:
+    w.append(sample[-1])
+
+chain, trace, final_kernel_results = bayesian_nn.run_hmc(initial_config=w,
+                                                         step_size=new_step,
+                                                         num_results=1000,
+                                                         num_steps_between_results=10,
                                                          num_leapfrog_steps=20,
                                                          parallel_iterations=10
                                                          )
