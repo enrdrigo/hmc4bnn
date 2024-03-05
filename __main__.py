@@ -8,44 +8,53 @@ import pickle as pkl
 
 import matplotlib.pyplot as plt
 
-x, y = np.loadtxt('/Users/enricodrigo/Documents/SISSA/bayesian_tf/sportran/examples/data/bayesian/mock_data/mock_data_sin.dat').T
+x = np.linspace(0,20,200)
 
-y = (np.sin(x / 2.2 - np.pi / 4) * 0.98 + np.sin( - x / 2.2 - np.pi / 4) * 0.98) / 2 + np.random.normal(size=x.shape, loc=0, scale=0.2)
+y = (np.sin(x / 2.2 - np.pi / 4) * 0.98 + np.sin( - x / 2.2 - np.pi / 4) * 0.98) / 2 + np.random.normal(size=x.shape, loc=0, scale=0.2) + 3
 
-y_true = (np.sin(x / 2.2 - np.pi / 4) * 0.98 + np.sin( - x / 2.2 - np.pi / 4) * 0.98) / 2
+y_true = (np.sin(x / 2.2 - np.pi / 4) * 0.98 + np.sin( - x / 2.2 - np.pi / 4) * 0.98) / 2 + 3
 
-x, y = tf.convert_to_tensor(x[::2], tf.float32), tf.convert_to_tensor(y[::2], tf.float32)
+x, y = tf.convert_to_tensor(x, tf.float32), tf.convert_to_tensor(y, tf.float32)
 
-y_true = (np.sin(x.numpy() / 2.2 - np.pi / 4) * 0.98 + np.sin( - x.numpy() / 2.2 - np.pi / 4) * 0.98) / 2
+y_true = (np.sin(x.numpy() / 2.2 - np.pi / 4) * 0.98 + np.sin( - x.numpy() / 2.2 - np.pi / 4) * 0.98) / 2 + 3
 
-bayesian_nn = hmc.bnn(x, y, units=[6, 6, 6], n_chain=1)
+bayesian_nn = hmc.bnn(x, y, units=[7,7,7], n_chain=1)
 
 wl = bayesian_nn.initialize()
 
 print(len(wl))
 
 
-chain, trace, final_kernel_results = bayesian_nn.run_hmc(initial_config=wl,
-                                                        step_size=2e-5,
-                                                        num_results=3000,
-                                                        num_steps_between_results=0,
-                                                        num_leapfrog_steps=20,
-                                                        parallel_iterations=10
-                                                       )
+chain, trace, final_kernel_results = bayesian_nn.run_nou_step_adapt(initial_config=wl,
+                                                         step_size=2e-3,
+                                                         num_results=20000,
+                                                         num_steps_between_results=0,
+                                                         max_tree_depth=7,
+                                                         parallel_iterations=10,
+                                                                    adaptation_rate=0.00015
+                                                         )
 
-
-target_log_probs = trace.accepted_results.target_log_prob
+target_log_probs = trace
 bayesian_nn.plot_neg_log_likelihood(np.negative(target_log_probs))
 
-chain, trace, final_kernel_results = bayesian_nn.run_hmc(initial_config=final_kernel_results.proposed_state,
-                                                         step_size=1e-5,
+new_step=final_kernel_results.new_step_size
+print(new_step)
+
+w=[]
+for sample in chain:
+    w.append(sample[-1])
+
+chain, trace, final_kernel_results = bayesian_nn.run_hmc(initial_config=w,
+                                                         step_size=new_step,
                                                          num_results=1000,
                                                          num_steps_between_results=0,
                                                          num_leapfrog_steps=20,
                                                          parallel_iterations=10
                                                          )
 
-target_log_probs = trace.accepted_results.target_log_prob
+
+
+target_log_probs = trace
 
 with open('chain.pkl', 'wb') as g:
     pkl.dump([chain, trace, final_kernel_results], g)

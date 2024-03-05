@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import time
 
 import pickle as pkl
+
 import copy
 
 class bnn:
@@ -109,7 +110,7 @@ class bnn:
 
         model.summary()
 
-        model.fit(self.x[:, 0], self.y, batch_size=200, epochs=4000)
+        model.fit(self.x[:, 0], self.y, batch_size=int(self.x.shape[0]/10), epochs=2000)
 
         w = []
 
@@ -125,12 +126,13 @@ class bnn:
 
         for idx, l in enumerate(model.layers):
             ws=l.get_weights()[0].shape
-
-            wl.append(tf.convert_to_tensor(w[int(idx*2)], dtype=tf.float32) + tf.random.normal(shape=((self.n_chain, )+ws), stddev=0.01))
-
+            wl.append(tf.convert_to_tensor(w[int(idx*2)], dtype=tf.float32)
+                      + tf.random.normal(shape=((self.n_chain, )+ws), stddev=0.01))
             bs = l.get_weights()[1].shape
+            wl.append(tf.convert_to_tensor(w[int(idx*2)+1], dtype=tf.float32)
+                      + tf.random.normal(shape=((self.n_chain, )+bs), stddev=0.01))
 
-            wl.append(tf.convert_to_tensor(w[int(idx*2)+1], dtype=tf.float32) + tf.random.normal(shape=((self.n_chain, )+bs), stddev=0.01))
+
 
         return wl
 
@@ -149,21 +151,18 @@ class bnn:
 
         return model
 
-    def trace_fn(self, current_state, results, summary_freq=100):
-        #step = results.step
-        tf.print(results.accepted_results.target_log_prob)
-        #with tf.summary.record_if(tf.equal(step % summary_freq, 0)):
+    def trace_fn(self, current_state, results):
+        tf.compat.v1.logging.info(f'{results.accepted_results.target_log_prob}')
 
-        #    for idx, tensor in enumerate(current_state, 1):
-        #        count = str(math.ceil(idx / 2))
-        #        name = "weights_" if idx % 2 == 0 else "biases_" + count
-        #        tf.summary.histogram(name, tensor, step=tf.cast(step, tf.int64))
+        return results
+
+    def trace_fn_step(self, current_state, results):
+        tf.compat.v1.logging.info(f'{results.inner_results.accepted_results.target_log_prob}  {results.new_step_size}')
+
         return results
 
     def trace_fn_bi_nou(self, current_state, results):
-        step = results.step
-        tf.print(results.inner_results.accepted_results.target_log_prob)
-
+        tf.compat.v1.logging.info(f'{results.inner_results.target_log_prob} {results.new_step_size} {results.inner_results.leapfrogs_taken}')
         return results
 
     def unnormalized_log_prob_off(self, *args):
@@ -233,35 +232,11 @@ class bnn:
 
     def run_hmc(self, initial_config, **kargs):
 
-        #strategy = tf.distribute.MirroredStrategy()
-        #tf.print(tf.config.list_physical_devices('CPU'))
-        #tf.print(tf.config.list_physical_devices('GPU'))
-
-        #print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
-
-        #with strategy.scope():
-
         kernel = tfp.mcmc.HamiltonianMonteCarlo(self.unnormalized_log_prob_normal,
                                              step_size=kargs['step_size'],
                                              num_leapfrog_steps=kargs['num_leapfrog_steps']
                                             )
 
-        '''
-        kernel = tfp.mcmc.NoUTurnSampler(self.unnormalized_log_prob_normal,
-                                         step_size=kargs['step_size'],
-                                         max_tree_depth=kargs['max_tree_depth']
-                                        )
-
-        kernel1 = tfp.mcmc.SimpleStepSizeAdaptation(kernel,
-                                                   num_adaptation_steps=int(kargs['num_burnin_steps']),
-                                                   target_accept_prob=0.9,
-                                                   adaptation_rate=2/(kargs['num_burnin_steps']),
-                                                  )
-
-        kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(inner_kernel=kernel,
-                                                          num_adaptation_steps=int(0.8 * num_burnin_steps)
-                                                         )
-        '''
 
         tf.print()
         start = time.perf_counter()
@@ -269,7 +244,7 @@ class bnn:
         chain, trace, final_kernel_results = graph_hmc(kernel=kernel,
                                                        current_state=initial_config,
                                                        num_results=kargs['num_results'],
-                                                       trace_fn=partial(self.trace_fn, summary_freq=20),
+                                                       trace_fn=self.trace_fn,
                                                        return_final_kernel_results=True,
                                                        parallel_iterations=kargs['parallel_iterations'],
                                                        num_steps_between_results = 0
@@ -282,40 +257,86 @@ class bnn:
         print(f"timeused = {timeused} seconds")
 
 
-        return chain, trace, final_kernel_results
+        return chain, trace.accepted_results.target_log_prob, final_kernel_results
 
-    def run_hmc_bi_nou(self, initial_config, **kargs):
+    def run_hmc_step_adapt(self, initial_config, **kargs):
 
-        #strategy = tf.distribute.MirroredStrategy()
-        #tf.print(tf.config.list_physical_devices('CPU'))
-        #tf.print(tf.config.list_physical_devices('GPU'))
-
-        #print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
-
-        #with strategy.scope():
 
         kernel = tfp.mcmc.HamiltonianMonteCarlo(self.unnormalized_log_prob_normal,
                                              step_size=kargs['step_size'],
                                              num_leapfrog_steps=kargs['num_leapfrog_steps']
                                             )
-        '''
+
+
+        kernel = tfp.mcmc.SimpleStepSizeAdaptation(kernel,
+                                                   num_adaptation_steps=kargs['num_results'],
+                                                   target_accept_prob=0.9,
+                                                   adaptation_rate=-abs(kargs['adaptation_rate']),
+                                                  )
+
+
+        start = time.perf_counter()
+
+        chain, trace, final_kernel_results = graph_hmc(kernel=kernel,
+                                                       current_state=initial_config,
+                                                       num_results=kargs['num_results'],
+                                                       trace_fn=self.trace_fn_step,
+                                                       return_final_kernel_results=True,
+                                                       parallel_iterations=kargs['parallel_iterations'],
+                                                       num_steps_between_results = 0
+                                                      )
+
+        end = time.perf_counter()
+
+        timeused = end - start
+
+        print(f"timeused = {timeused} seconds")
+
+
+        return chain, trace.inner_results.accepted_results.target_log_prob, final_kernel_results
+
+    def run_nou_step_adapt(self, initial_config, **kargs):
+
 
         kernel = tfp.mcmc.NoUTurnSampler(self.unnormalized_log_prob_normal,
                                          step_size=kargs['step_size'],
                                          max_tree_depth=kargs['max_tree_depth']
                                         )
 
-        '''
-        kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(kernel,
-                                                          num_adaptation_steps=int(kargs['num_results']),
-                                                          target_accept_prob=0.9,
-                                                          exploration_shrinkage = 0.1
-                                                         )
-        '''
-        kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(inner_kernel=kernel,
-                                                          num_adaptation_steps=int(0.8 * num_burnin_steps)
-                                                         )
-        '''
+        kernel = tfp.mcmc.SimpleStepSizeAdaptation(kernel,
+                                                   num_adaptation_steps=kargs['num_results'],
+                                                   target_accept_prob=0.9,
+                                                   adaptation_rate=-abs(kargs['adaptation_rate']),
+                                                  )
+
+
+        start = time.perf_counter()
+
+        chain, trace, final_kernel_results = graph_hmc(kernel=kernel,
+                                                       current_state=initial_config,
+                                                       num_results=kargs['num_results'],
+                                                       trace_fn=self.trace_fn_bi_nou,
+                                                       return_final_kernel_results=True,
+                                                       parallel_iterations=kargs['parallel_iterations'],
+                                                       num_steps_between_results = 0
+                                                      )
+
+        end = time.perf_counter()
+
+        timeused = end - start
+
+        print(f"timeused = {timeused} seconds")
+
+
+        return chain, trace.inner_results.target_log_prob, final_kernel_results
+
+    def run_hmc_bi_nou(self, initial_config, **kargs):
+
+
+        kernel = tfp.mcmc.NoUTurnSampler(self.unnormalized_log_prob_normal,
+                                         step_size=kargs['step_size'],
+                                         max_tree_depth=kargs['max_tree_depth']
+                                        )
 
         tf.print()
         start = time.perf_counter()
@@ -336,64 +357,10 @@ class bnn:
         print(f"timeused = {timeused} seconds")
 
 
-        return chain, trace, final_kernel_results
-
-    def run_hmc_one_step(self, initial_config, **kargs):
-
-        #strategy = tf.distribute.MirroredStrategy()
-        #tf.print(tf.config.list_physical_devices('CPU'))
-        #tf.print(tf.config.list_physical_devices('GPU'))
-
-        #print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
-
-        #with strategy.scope():
+        return chain, trace.target_log_prob, final_kernel_results
 
 
-
-        kernel = tfp.mcmc.HamiltonianMonteCarlo(self.unnormalized_log_prob_normal,
-                                             step_size=kargs['step_size'],
-                                             num_leapfrog_steps=kargs['num_leapfrog_steps']
-                                            )
-
-        '''
-        kernel = tfp.mcmc.NoUTurnSampler(self.unnormalized_log_prob_normal,
-                                         step_size=kargs['step_size'],
-                                         max_tree_depth=kargs['max_tree_depth']
-                                        )
-
-        '''
-        kernel = tfp.mcmc.SimpleStepSizeAdaptation(kernel,
-                                                   num_adaptation_steps=int(kargs['num_burnin_steps']*0.8),
-                                                   target_accept_prob=0.97,
-                                                   adaptation_rate=0.01,
-                                                  )
-
-        '''
-        kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(inner_kernel=kernel,
-                                                          num_adaptation_steps=int(0.8 * num_burnin_steps)
-                                                         )
-        '''
-
-        start = time.perf_counter()
-        current_state = initial_config
-        previous_kernel_results = kernel.bootstrap_results(initial_config)
-        for step in range(kargs['num_burnin_steps'] + kargs['num_results']):
-            print('..')
-            current_state, previous_kernel_results = kernel.one_step(current_state=initial_config,
-                                                                     previous_kernel_results = previous_kernel_results
-                                                                    )
-
-        end = time.perf_counter()
-
-        timeused = end - start
-
-        print(f"timeused = {timeused} seconds")
-
-
-        return
-
-
-@tf.function
+@tf.function(jit_compile=True)
 def graph_hmc(*args, **kwargs):
     """Compile static graph for tfp.mcmc.sample_chain.
     Since this is bulk of the computation, using @tf.function here
