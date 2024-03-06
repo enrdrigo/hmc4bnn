@@ -8,79 +8,25 @@ import pickle as pkl
 
 import matplotlib.pyplot as plt
 
-x = np.linspace(-2,2,100)
+x = np.linspace(-0.5, 0.5, 7)
 
-y = np.cos(x)**2*x*10 + np.random.normal(size=x.shape, loc=0, scale=0.05)
+y = np.cos(x)**2 + np.random.normal(size=x.shape, loc=0, scale=0.01)
 
-y_true = np.cos(x)**2*x*10
+y_true = np.cos(x)**2
 
 x, y = tf.convert_to_tensor(x, tf.float32), tf.convert_to_tensor(y, tf.float32)
 
-bayesian_nn = hmc.bnn(x, y, units=[32, 32], n_chain=1)
+bayesian_nn = hmc.bnn(x, y, units=[16, 16], n_chain=1)
 
 wl = bayesian_nn.initialize()
 
-print(len(wl))
-
-
-model_var = bayesian_nn.build_network(wl[::2], wl[1::2])
-
-
-
-y_pred_var = model_var(bayesian_nn.x)
-
-plt.plot(bayesian_nn.x[:, 0].numpy(), bayesian_nn.y, '.', label='sample')
-plt.plot(bayesian_nn.x[:, 0].numpy(), y_true, label='True')
-plt.plot(bayesian_nn.x[:, 0].numpy(), y_pred_var[0, :, 0], label='variational')
-plt.legend()
-plt.show()
-
-
-chain, trace, final_kernel_results = bayesian_nn.run_nou_step_adapt(initial_config=wl,
-                                                         step_size=0.5e-4,
-                                                         num_results=20000,
-                                                         max_tree_depth=5,
-                                                         parallel_iterations=10,
-                                                                    adaptation_rate=-0.0001
-                                                         )
-
-target_log_probs = trace
-
-with open('target_log_prob_bi.pkl', 'wb') as g:
-    pkl.dump(target_log_probs, g)
-bayesian_nn.plot_neg_log_likelihood(np.negative(target_log_probs))
-
-new_step = final_kernel_results.new_step_size
-print(new_step)
-
-w=[]
-for sample in chain:
-    w.append(sample[-1])
-
-chain, trace, final_kernel_results = bayesian_nn.run_hmc(initial_config=w,
-                                                         step_size=new_step,
-                                                         num_results=20000,
-                                                         num_steps_between_results=0,
-                                                         num_leapfrog_steps=20,
+chain, trace, final_kernel_results = bayesian_nn.run_hmc(initial_config=wl,
+                                                         step_size=4e-6,
+                                                         num_results=2000,
+                                                         num_steps_between_results=120,
+                                                         num_leapfrog_steps=120,
                                                          parallel_iterations=10
                                                          )
-
-target_log_probs = trace
-bayesian_nn.plot_neg_log_likelihood(np.negative(target_log_probs))
-
-w=[]
-for sample in chain:
-    w.append(sample[-1])
-
-chain, trace, final_kernel_results = bayesian_nn.run_hmc(initial_config=w,
-                                                         step_size=new_step,
-                                                         num_results=1000,
-                                                         num_steps_between_results=10,
-                                                         num_leapfrog_steps=20,
-                                                         parallel_iterations=10
-                                                         )
-
-
 
 target_log_probs = trace
 
@@ -91,22 +37,3 @@ with open('target_log_prob.pkl', 'wb') as g:
     pkl.dump(target_log_probs, g)
 
 bayesian_nn.plot_neg_log_likelihood(np.negative(target_log_probs))
-
-plt.hist(target_log_probs.numpy().flatten(), bins='auto')
-plt.show()
-
-model = bayesian_nn.build_network(chain[::2], chain[1::2])
-
-model_var = bayesian_nn.build_network(wl[::2], wl[1::2])
-
-
-y_pred=model(bayesian_nn.x)
-
-y_pred_var = model_var(bayesian_nn.x)
-
-plt.plot(bayesian_nn.x[:, 0].numpy(), bayesian_nn.y, '.', label='sample')
-plt.plot(bayesian_nn.x[:, 0].numpy(), y_pred[::2,0, :, 0].numpy().T, color='black')
-plt.plot(bayesian_nn.x[:, 0].numpy(), y_true, label='True')
-plt.plot(bayesian_nn.x[:, 0].numpy(), y_pred_var[0, :, 0], label='variational')
-plt.legend()
-plt.show()

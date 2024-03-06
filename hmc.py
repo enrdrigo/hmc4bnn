@@ -138,10 +138,12 @@ class bnn:
         for idx, l in enumerate(model.layers):
             ws=l.get_weights()[0].shape
             wl.append(tf.convert_to_tensor(w[int(idx*2)], dtype=tf.float32)
-                      + tf.random.normal(shape=((self.n_chain, )+ws), stddev=0.001))
+                      + tf.random.normal(shape=((self.n_chain, )+ws), stddev=0.6))
             bs = l.get_weights()[1].shape
             wl.append(tf.convert_to_tensor(w[int(idx*2)+1], dtype=tf.float32)
-                      + tf.random.normal(shape=((self.n_chain, )+bs), stddev=0.001))
+                      + tf.random.normal(shape=((self.n_chain, )+bs), stddev=0.6))
+        with open('initialconfig.pkl', 'wb') as g:
+            pkl.dump(wl, g)
         return wl
 
 
@@ -255,6 +257,8 @@ class bnn:
 
 
         return chain, trace.accepted_results.target_log_prob, final_kernel_results
+
+
 
     def run_hmc_step_adapt(self, initial_config, **kargs):
 
