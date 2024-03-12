@@ -137,9 +137,9 @@ class bnn:
 
         for idx, l in enumerate(model.layers):
             ws=l.get_weights()[0].shape
-            wl.append(tf.convert_to_tensor(w[int(idx*2)], dtype=tf.float32) +  tf.random.normal(shape=((self.n_chain, )+ws), stddev=0.01))
+            wl.append(tf.convert_to_tensor(w[int(idx*2)], dtype=tf.float32) + tf.random.normal(shape=((self.n_chain, ) + ws), stddev=0.005))
             bs = l.get_weights()[1].shape
-            wl.append(tf.convert_to_tensor(w[int(idx*2)+1], dtype=tf.float32) + tf.random.normal(shape=((self.n_chain, )+bs), stddev=0.01))
+            wl.append(tf.convert_to_tensor(w[int(idx*2)+1], dtype=tf.float32) + tf.random.normal(shape=((self.n_chain, ) + bs), stddev=0.005))
         with open('initialconfig.pkl', 'wb') as g:
             pkl.dump(wl, g)
         return wl
@@ -241,6 +241,7 @@ class bnn:
         chain, trace, final_kernel_results = graph_hmc(kernel=kernel,
                                                        current_state=initial_config,
                                                        num_results=kargs['num_results'],
+                                                       num_burnin_steps=kargs['num_burnin_steps'],
                                                        trace_fn=self.trace_fn,
                                                        return_final_kernel_results=True,
                                                        parallel_iterations=kargs['parallel_iterations'],
@@ -269,7 +270,7 @@ class bnn:
 
         kernel = tfp.mcmc.SimpleStepSizeAdaptation(kernel,
                                                    num_adaptation_steps=int(0.8*kargs['num_burnin_steps']),
-                                                   target_accept_prob=0.7,
+                                                   target_accept_prob=0.9,
                                                    adaptation_rate=kargs['adaptation_rate'],
                                                   )
 
@@ -302,12 +303,12 @@ class bnn:
                                          step_size=kargs['step_size'],
                                          max_tree_depth=kargs['max_tree_depth'],
                                          max_energy_diff=100,
-                                         unrolled_leapfrog_steps=20
+                                         unrolled_leapfrog_steps=40
                                         )
 
         kernel = tfp.mcmc.SimpleStepSizeAdaptation(kernel,
                                                    num_adaptation_steps=kargs['num_burnin_steps'],
-                                                   target_accept_prob=0.99,
+                                                   target_accept_prob=0.9,
                                                    adaptation_rate=kargs['adaptation_rate'],
                                                   )
 
@@ -321,7 +322,7 @@ class bnn:
                                                        trace_fn=self.trace_fn_bi_nou,
                                                        return_final_kernel_results=True,
                                                        parallel_iterations=kargs['parallel_iterations'],
-                                                       num_steps_between_results = 0
+                                                       num_steps_between_results = kargs['num_steps_between_results']
                                                       )
 
         end = time.perf_counter()
